@@ -9,13 +9,11 @@ import java.util.ArrayList;
 import javax.imageio.ImageIO;
 
 import global.GLOBAL;
-import obj.OBJParser;
-import obj.Triangle;
+import poisson.PoissonSampler;
 import scene.*;
 import scene.light.*;
 import scene.material.*;
 import scene.surface.*;
-import util.Mat3;
 import util.TextureBuffer;
 import util.Vec2;
 import util.Vec3;
@@ -33,6 +31,8 @@ public class Renderer {
 	int[] pixels;
 	int height, width;
 	
+	boolean ss = false;
+	double poissonHeight,poissonWidth,minimum;
 	
 	/**
 	 * @param s Scene which needs to be rendered
@@ -45,6 +45,16 @@ public class Renderer {
 		pixels = new int[width*height];
 	}
 	
+	public Renderer(Scene s, double poissonWidth, double poissonHeight, double minimum){
+		this.s = s;
+		height = s.getCamera().getResolution()[0];
+		width = s.getCamera().getResolution()[1];
+		pixels = new int[width*height];
+		this.poissonHeight = poissonHeight;
+		this.poissonWidth = poissonWidth;
+		this.minimum = minimum;
+		ss = true;
+	}
 	
 	
 	
@@ -54,13 +64,40 @@ public class Renderer {
 	 */
 	public void render(){
 		ArrayList<Surface> surfaceList = s.getSurfaces();
-		for (int y=0; y<height; y++){
-			for(int x=0; x<width; x++){
-				Vec3[] ray = s.getCamera().constructEyeRay(x,y);
-				Vec3 color = trace(ray,surfaceList);
-				pixels[y*width + x] = colorToIntRGB(color);
+			for (int y=0; y<height; y++){
+				for(int x=0; x<width; x++){
+					if(!ss){
+						Ray ray = s.getCamera().constructEyeRay(x,y);
+						Vec3 color = trace(ray,surfaceList,0);
+						pixels[y*width + x] = colorToIntRGB(color);
+					} else{
+						PoissonSampler ps = new PoissonSampler(poissonWidth,poissonHeight,minimum);
+						double size = 0;
+						double r = 0;
+						double g = 0;
+						double b = 0;
+						for(Vec2 p : ps.getSampler()){
+							double newX = x + p.getX();
+							double newY = y + p.getY();
+							if(newX>=0 && newY>=0 && newX<width && newY<height){
+								Ray ray = s.getCamera().constructEyeRay(newX,newY);
+								Vec3 color = trace(ray,surfaceList,0);
+								r = r+ color.getX();
+								g = g + color.getY();
+								b = b + color.getZ();
+								size++;
+							}
+						}
+						r = r/size;
+						g = g/size;
+						b = b/size;
+						Vec3 avgColor = new Vec3(r,g,b);
+						pixels[y*width + x] = colorToIntRGB(avgColor);
+					}
+				}
 			}
-		}
+		
+		
 		try {
 			getImageFromArray(pixels,width,height,s.getOutputfile());
 		} catch (IOException e) {
@@ -78,36 +115,66 @@ public class Renderer {
 	 * @param surfaceList All surfaces in the scene
 	 * @return Color of the pixel intersected by the ray
 	 */
-	public Vec3 trace(Vec3[] ray,ArrayList<Surface> surfaceList){
-		Surface nearest = null;
+	public Vec3 trace(Ray ray,ArrayList<Surface> surfaceList,int depth){
+		Ray r = ray.addEpsilon();
+		Intersection nearest = null;
 		Double t = Double.MAX_VALUE;
+		Vec3 color;
+		Vec3 colorTrans = new Vec3(0,0,0);
+		Vec3 colorRef = new Vec3(0,0,0);
 		for(Surface surf:surfaceList){
+			Intersection current = null;
 			if(surf instanceof Sphere){
-				double currentT = intersectionTestSphere(((Sphere) surf).getPosition(),((Sphere) surf).getRadius(),ray);
-				if(currentT>0 && currentT<t){
-					nearest = surf;
-					t=currentT;
-				}
+				current = r.getTransformedRay(surf).intersectionTestSphere((Sphere) surf);
 			} else if(surf instanceof Mesh){
-				double currentT = intersectionTestMesh((Mesh)surf,((Mesh) surf).getObj(),ray,true);
-				if(currentT>0 && currentT<t){
-					nearest = surf;
-					t = currentT;
-				}
+				current = r.getTransformedRay(surf).intersectionTestMesh((Mesh) surf);
 			}
+			if(current!=null && current.getT()>0 && current.getT()<t){
+				nearest = current;
+				t=current.getT();
+			}
+			
 		}
 		if(nearest!=null){
-			Vec3 intersecP = ray[0].addWith(ray[1].multiplyWithScalar(t));
+			Vec3 intersecP = r.getIP(t);
 			Vec3 normal = null;
-			if(nearest instanceof Sphere){
-				normal = calculateSphereNormal((Sphere) nearest, intersecP);
-			} else if(nearest instanceof Mesh){
-				normal = calculateMeshNormal((Mesh) nearest);
+			if(nearest.getSurf() instanceof Sphere){
+				normal = calculateSphereNormal(nearest, r.getTransformedRay(nearest.getSurf()).getIP(t));
+			} else if(nearest.getSurf() instanceof Mesh){
+				normal = calculateMeshNormal(nearest);
 			}
-			return shade(ray,nearest,intersecP,normal);
+			color = shade(r,nearest,intersecP,normal);
+			
+			if (depth>=s.getCamera().getMax_bounces()){
+				return color;
+			}
+			double trans = nearest.getSurf().getMaterial().getTransmittance();
+			double ref = nearest.getSurf().getMaterial().getReflactance();
+			double iof = nearest.getSurf().getMaterial().getRefraction();
+			
+			if (trans>0){
+				Vec3 transDir = r.calculateTransmittanceDirection(normal,iof);
+				if(transDir==null) {
+					transDir = r.calculateReflectanceDirection(normal);
+					color = new Vec3(0,0,0);
+				}
+				Ray transRay = new Ray(intersecP, transDir);
+				colorTrans = trace(transRay,surfaceList,depth+1);
+				
+			}
+			if(ref>0){
+				Ray refRay = new Ray(intersecP, r.calculateReflectanceDirection(normal));
+				colorRef = trace(refRay,surfaceList,depth+1);
+			}
+			colorTrans = colorTrans.multiplyWithScalar(trans);
+			colorRef = colorRef.multiplyWithScalar(ref);
+			color = color.multiplyWithScalar(1-trans-ref);
+			return colorTrans.addWith(colorRef.addWith(color));
 		} else {
 			return s.getBackground_color();
 		}
+		
+		
 	}
 	
 	
@@ -119,9 +186,10 @@ public class Renderer {
 	 * @param intersecP The intersection point of the sphere and the ray
 	 * @return Vec3 containing the normal
 	 */
-	public Vec3 calculateSphereNormal(Sphere nearest,Vec3 intersecP){
-		Vec3 nearestPos = ((Sphere) nearest).getPosition();
+	public Vec3 calculateSphereNormal(Intersection nearest,Vec3 intersecP){
+		Vec3 nearestPos = ((Sphere) nearest.getSurf()).getPosition();
 		Vec3 normal = intersecP.subtractedWith(nearestPos);
+		normal = nearest.getSurf().getTransformationMatrix().transpose().multiplyNormal(normal);
 		normal = normal.normalize();
 		return normal;
 	}
@@ -133,16 +201,16 @@ public class Renderer {
 	 * @param nearest Mesh intersecting the ray
 	 * @return Vec3 containing the normal
 	 */
-	public Vec3 calculateMeshNormal(Mesh nearest){
-		ArrayList<Vec3> normals = ((Mesh) nearest).getObj().getNormals();
+	public Vec3 calculateMeshNormal(Intersection nearest){
+		ArrayList<Vec3> normals = ((Mesh) nearest.getSurf()).getObj().getNormals();
 		
-		double beta = ((Mesh) nearest).getNearestbeta();
-		double gamma = ((Mesh) nearest).getNearestgamma();
+		double beta = nearest.getBeta();
+		double gamma = nearest.getGamma();
 		double alpha = beta+gamma;
 		
-		Vec3 normal1 = normals.get((int) (((Mesh) nearest).getNearest1().getZ()-1));
-		Vec3 normal2 = normals.get((int) (((Mesh) nearest).getNearest2().getZ()-1));
-		Vec3 normal3 = normals.get((int) (((Mesh) nearest).getNearest3().getZ()-1));
+		Vec3 normal1 = normals.get((int) (nearest.getTri().getVertex1().getZ()-1));
+		Vec3 normal2 = normals.get((int) (nearest.getTri().getVertex2().getZ()-1));
+		Vec3 normal3 = normals.get((int) (nearest.getTri().getVertex3().getZ()-1));
 		
 		Vec3 na = normal1.multiplyWithScalar(alpha);
 		Vec3 nb = normal2.multiplyWithScalar(1-alpha);
@@ -152,101 +220,10 @@ public class Renderer {
 		Vec3 ne = na.addWith(nc);
 		nd = nd.multiplyWithScalar(beta/alpha);
 		ne = ne.multiplyWithScalar(gamma/alpha);
-		
-		return nd.addWith(ne);
-	}
-	
-	
-	
-	
-	
-	/**
-	 * Calculates if a sphere is intersecting the ray
-	 * If so, returns the distance
-	 * @param c the origin of the sphere
-	 * @param r the radius of the sphere
-	 * @param ray Calculates if a sphere is intersecting the ray
-	 * If so, returns the distance
-	 * @return the distance t to the sphere or 0 if ray doesn't intersect
-	 */
-	public double intersectionTestSphere(Vec3 c, double r, Vec3[] ray){
-		Vec3 e = ray[0];
-		Vec3 d = ray[1];
-		Vec3 eminc = e.subtractedWith(c);
-		double discriminant = Math.pow(d.dotproductWith(eminc),2) - d.dotproductWith(d)*((eminc.dotproductWith(eminc))-Math.pow(r, 2));
-		if(discriminant==0){
-			return (-d.dotproductWith(e.subtractedWith(c)))/(d.dotproductWith(d));
-		} else if(discriminant>0){
-			discriminant = Math.sqrt(discriminant);
-			double plus = (-d.dotproductWith(e.subtractedWith(c))+discriminant)/(d.dotproductWith(d));
-			double minus = (-d.dotproductWith(e.subtractedWith(c))-discriminant)/(d.dotproductWith(d));
-			if(plus>minus && minus>0){
-				return minus;
-			} else if(minus>plus && plus>0){
-				return plus;
-			}
-		}
-		return 0;
-	}
-	
-	
-	
-	
-	/**
-	 * Calculates if a Mesh is intersecting the ray
-	 * If so, returns the distance
-	 * @param m Mesh to test to
-	 * @param obj the OBJParser Object of the Mesh
-	 * @param ray Calculates if a sphere is intersecting the ray
-	 * @param set Determines if the beta,gamma, and the three vertices needs to be set in Nearest
-	 * @return the distance t to the Mesh or 0 if the ray doesn't intersect
-	 */
-	public double intersectionTestMesh(Mesh m, OBJParser obj, Vec3[] ray, boolean set){
-		ArrayList<Triangle> triangles = obj.getTriangles();
-		ArrayList<Vec3> vertices = obj.getVertices();
-		double t = Double.MAX_VALUE;
-		for(Triangle tri:triangles){
-			Vec3 a = vertices.get((int) (tri.getVertex1().getX()-1));
-			Vec3 b = vertices.get((int) (tri.getVertex2().getX()-1));
-			Vec3 c = vertices.get((int) (tri.getVertex3().getX()-1));
-			
-			double beta, gamma;
-			
-			Mat3 M = new Mat3();
-			M.fromValues(a.getX()-b.getX(),a.getY()-b.getY(),a.getZ()-b.getZ(),a.getX()-c.getX(),a.getY()-c.getY(),a.getZ()-c.getZ(),ray[1].getX(),ray[1].getY(),ray[1].getZ());
-			double mdet = M.getDeterminant();
-			
-			Mat3 Mbeta = new Mat3();
-			Mbeta.fromValues(a.getX()-ray[0].getX(),a.getY()-ray[0].getY(),a.getZ()-ray[0].getZ(),a.getX()-c.getX(),a.getY()-c.getY(),a.getZ()-c.getZ(),ray[1].getX(),ray[1].getY(),ray[1].getZ());
-			double betadet = Mbeta.getDeterminant();
-			beta = betadet/mdet;
-			if(beta>0){
-				Mat3 Mgamma = new Mat3();
-				Mgamma.fromValues(a.getX()-b.getX(),a.getY()-b.getY(),a.getZ()-b.getZ(),a.getX()-ray[0].getX(),a.getY()-ray[0].getY(),a.getZ()-ray[0].getZ(),ray[1].getX(),ray[1].getY(),ray[1].getZ());
-				double gammadet = Mgamma.getDeterminant();
-				gamma = gammadet/mdet;
-				if(gamma>0 && gamma+beta <1){
-					Mat3 Mt = new Mat3();
-					Mt.fromValues(a.getX()-b.getX(),a.getY()-b.getY(),a.getZ()-b.getZ(),a.getX()-c.getX(),a.getY()-c.getY(),a.getZ()-c.getZ(),a.getX()-ray[0].getX(),a.getY()-ray[0].getY(),a.getZ()-ray[0].getZ());
-					double tdet = Mt.getDeterminant();
-					if((tdet/mdet)<t && t>0){
-						t = tdet/mdet;
-						if(set){
-							m.setNearest1(tri.getVertex1());
-							m.setNearest2(tri.getVertex2());
-							m.setNearest3(tri.getVertex3());
-							m.setNearestbeta(beta);
-							m.setNearestgamma(gamma);
-						}
-					}
-				}
-			}
-		}
-		if(t == Double.MAX_VALUE){
-			return 0;
-		} else {
-			return t;
-		}
+		Vec3 normal = nd.addWith(ne);
+		normal = nearest.getSurf().getTransformationMatrix().transpose().multiplyVector(normal);
+		normal = normal.normalize();
+		return normal;
 	}
 	
 	
@@ -260,16 +237,15 @@ public class Renderer {
 	 * @param normal Normal of the intersectionP
 	 * @return Vec3 containing the color to shade to
 	 */
-	public Vec3 shade(Vec3[] ray,Surface nearest, Vec3 intersecP, Vec3 normal){
-		Material mat = nearest.getMaterial();
+	public Vec3 shade(Ray ray,Intersection nearest, Vec3 intersecP, Vec3 normal){
+		Material mat = nearest.getSurf().getMaterial();
 		Vec3 shadedColor = new Vec3(0,0,0);
 		Vec3 materialColor = null;
 		if(mat instanceof SolidMaterial){
 			materialColor = ((SolidMaterial) mat).getColor();
 		}else if(mat instanceof TexturedMaterial){
-			if(nearest instanceof Mesh){
-				double[] color = getMeshTextureColor((Mesh) nearest,((TexturedMaterial) mat).getTexture());
-				materialColor = new Vec3(color[0]/255.0,color[1]/255.0,color[2]/255.0);
+			if(nearest.getSurf() instanceof Mesh){
+				materialColor = getMeshTextureColor(nearest,((TexturedMaterial) mat).getTexture());
 			} else {
 				//TBD Texture of sphere
 			}
@@ -309,7 +285,7 @@ public class Renderer {
 					r = normal.multiplyWithScalar(2*ldotn);
 					r = r.subtractedWith(li);
 					r = r.normalize();
-					v = ray[1];
+					v = ray.getDirection();
 					v = v.normalize();
 					v = v.negate();
 					v = v.normalize();
@@ -343,21 +319,50 @@ public class Renderer {
 	 * @param texture Name of the texture file
 	 * @return An array of doubles containing the r,g and b of the color
 	 */
-	public double[] getMeshTextureColor(Mesh nearest,String texture){
+	public Vec3 getMeshTextureColor(Intersection nearest,String texture){
 		tex.initialize(texture);
 		int height = tex.getHeight();
 		int width = tex.getWidth();
-		ArrayList<Vec2> texcoords = ((Mesh) nearest).getObj().getTexcoords();
-		Vec2 tex1 = texcoords.get((int) (((Mesh) nearest).getNearest1().getY()-1));
-		Vec2 tex2 = texcoords.get((int) (((Mesh) nearest).getNearest2().getY()-1));
-		Vec2 tex3 = texcoords.get((int) (((Mesh) nearest).getNearest3().getY()-1));
-		double beta = ((Mesh) nearest).getNearestbeta();
-		double gamma = ((Mesh) nearest).getNearestgamma();
-		Double x = tex1.getX() + beta * (tex2.getX()-tex1.getX()) + gamma * (tex3.getX()-tex1.getX());
-		Double y = tex1.getY() + beta * (tex2.getY()-tex1.getY()) + gamma * (tex3.getY()-tex1.getY());
-		int imgX = (int) Math.round(x*(width-1));
-		int imgY = (int) Math.round(y*(height-1));
-		return tex.getPixel(imgX, imgY);
+		ArrayList<Vec2> texcoords = ((Mesh) nearest.getSurf()).getObj().getTexcoords();
+		Vec2 tex1 = texcoords.get((int) (nearest.getTri().getVertex1().getY()-1));
+		Vec2 tex2 = texcoords.get((int) (nearest.getTri().getVertex2().getY()-1));
+		Vec2 tex3 = texcoords.get((int) (nearest.getTri().getVertex3().getY()-1));
+		double beta = nearest.getBeta();
+		double gamma = nearest.getGamma();
+		double x = tex1.getX() + beta * (tex2.getX()-tex1.getX()) + gamma * (tex3.getX()-tex1.getX());
+		double y = tex1.getY() + beta * (tex2.getY()-tex1.getY()) + gamma * (tex3.getY()-tex1.getY());
+		
+		x = (x%1)*(width-1);
+		y = (y%1)*(height-1);
+		
+		//Perform bilinear interpolation
+		double ceilX = Math.ceil(x);
+		double ceilY = Math.ceil(y);
+		double floorX = Math.floor(x);
+		double floorY = Math.floor(y);
+		
+		double deltaX = x - floorX;
+		double deltaY = y - floorY;
+		
+		double[] topleft = tex.getPixel((int)floorX, (int)floorY);
+		double[] topright = tex.getPixel((int)ceilX, (int)floorY);
+		double[] bottomleft = tex.getPixel((int)floorX,(int)ceilY);
+		double[] bottomright = tex.getPixel((int)ceilX, (int)ceilY);
+		
+		
+		double interpTopR = (1-deltaX) * topleft[0] + deltaX * topright[0];
+		double interpBottomR = (1-deltaX) * bottomleft[0] + deltaX * bottomright[0];
+		double interpR = (1-deltaY) * interpTopR + deltaY * interpBottomR;
+		
+		double interpTopG = (1-deltaX) * topleft[1] + deltaX * topright[1];
+		double interpBottomG = (1-deltaX) * bottomleft[1] + deltaX * bottomright[1];
+		double interpG = (1-deltaY) * interpTopG + deltaY * interpBottomG;
+		
+		double interpTopB = (1-deltaX) * topleft[2] + deltaX * topright[2];
+		double interpBottomB = (1-deltaX) * bottomleft[2] + deltaX * bottomright[2];
+		double interpB = (1-deltaY) * interpTopB + deltaY * interpBottomB;
+		
+		return new Vec3(interpR/255.0,interpG/255.0,interpB/255.0);
 	}
 	
 	
@@ -370,28 +375,38 @@ public class Renderer {
 	 * @param nearest Surface 
 	 * @return true if lightsource is blocked, false if ligtsource is unblocked
 	 */
-	public boolean checkShadow(Light l, Vec3 iP, Surface nearest){
+	public boolean checkShadow(Light l, Vec3 iP, Intersection nearest){
 		ArrayList<Surface> surfaceList = s.getSurfaces();
 		for(Surface s : surfaceList){
-			if(!s.equals(nearest)){
-				Vec3[] ray = new Vec3[2];
+				Ray ray;
 				if(l instanceof ParallelLight){
-					ray[0] = iP;
-					ray[1] = ((ParallelLight) l).getDirection().negate();
+					ray = new Ray(iP, ((ParallelLight) l).getDirection().negate());
+					ray = ray.addEpsilon();
+					double t = 0;
+					if(s instanceof Sphere){
+						t = ray.getTransformedRay(s).intersectionTestSphere((Sphere)s).getT();
+					} else if(s instanceof Mesh){
+						t = ray.getTransformedRay(s).intersectionTestMesh((Mesh)s).getT();
+					}
+					if(t>0){
+						return true;
+					}
 				} else {
-					ray[0] = iP;
-					ray[1] = ((PointLight) l).getPosition().subtractedWith(iP);
-				}
-				if(s instanceof Sphere){
-					if(intersectionTestSphere(((Sphere) s).getPosition(),((Sphere) s).getRadius(),ray)>0){
+					ray = new Ray(iP, ((PointLight) l).getPosition().subtractedWith(iP));
+					ray = ray.addEpsilon();
+					double t = 0;
+					if(s instanceof Sphere){
+						t = ray.getTransformedRay(s).intersectionTestSphere((Sphere)s).getT();
+					} else if(s instanceof Mesh){
+						t = ray.getTransformedRay(s).intersectionTestMesh((Mesh)s).getT();
+					}
+				
+					if(t>0 && t<1){
 						return true;
 					}
-				} else if(s instanceof Mesh){
-					if(intersectionTestMesh((Mesh) s,((Mesh) s).getObj(),ray,false)>0){
-						return true;
-					}
 				}
-			}
+				
+				
 		}
 		return false;
 	}

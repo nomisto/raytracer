@@ -1,9 +1,7 @@
 package scene.surface;
 
-import java.util.ArrayList;
-
 import scene.material.Material;
-import scene.transformation.Transformation;
+import util.Mat4;
 import util.Vec3;
 
 /**
@@ -22,8 +20,8 @@ public class Sphere extends Surface{
 	 * @param material The material of the sphere
 	 * @param transformations The transformations of the sphere
 	 */
-	public Sphere(double radius, Vec3 position, Material material, ArrayList<Transformation> transformations) {
-		super(material, transformations);
+	public Sphere(double radius, Vec3 position, Material material, Mat4 transformationMatrix) {
+		super(material, transformationMatrix);
 		this.radius = radius;
 		this.position = position;
 	}

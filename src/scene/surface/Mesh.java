@@ -1,11 +1,9 @@
 package scene.surface;
 
 import java.io.IOException;
-import java.util.ArrayList;
-
 import obj.OBJParser;
 import scene.material.Material;
-import scene.transformation.Transformation;
+import util.Mat4;
 import util.Vec3;
 
 /**
@@ -29,8 +27,8 @@ public class Mesh extends Surface{
 	 * @param material The material of this mesh
 	 * @param transformations The transformations of this mesh
 	 */
-	public Mesh(String name,Material material, ArrayList<Transformation> transformations) {
-		super(material, transformations);
+	public Mesh(String name,Material material, Mat4 transformationMatrix) {
+		super(material, transformationMatrix);
 		this.name = name;
 		try {
 			obj = new OBJParser(name);
@@ -46,86 +44,9 @@ public class Mesh extends Surface{
 		return obj;
 	}
 
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @return The first nearest vertex
-	 */
-	public Vec3 getNearest1() {
-		return nearest1;
+	public String getName() {
+		return name;
 	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @param nearest1 The second nearest vertex
-	 */
-	public void setNearest1(Vec3 nearest1) {
-		this.nearest1 = nearest1;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @return The second nearest vertex
-	 */
-	public Vec3 getNearest2() {
-		return nearest2;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @param nearest2 The third nearest vertex
-	 */
-	public void setNearest2(Vec3 nearest2) {
-		this.nearest2 = nearest2;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @return The first nearest vertex
-	 */
-	public Vec3 getNearest3() {
-		return nearest3;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @param nearest3 The third nearest vertex
-	 */
-	public void setNearest3(Vec3 nearest3) {
-		this.nearest3 = nearest3;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @return The beta value of the intersection test
-	 */
-	public double getNearestbeta() {
-		return nearestbeta;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @param nearestbeta The beta value of the intersection test
-	 */
-	public void setNearestbeta(double nearestbeta) {
-		this.nearestbeta = nearestbeta;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @return The gamma value of the intersection test
-	 */
-	public double getNearestgamma() {
-		return nearestgamma;
-	}
-
-	/**
-	 * Used for shading after an successful intersetion test
-	 * @param nearestgamma The gamma value of the intersection test
-	 */
-	public void setNearestgamma(double nearestgamma) {
-		this.nearestgamma = nearestgamma;
-	}
-
 	
 	
 }

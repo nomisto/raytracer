@@ -47,5 +47,12 @@ public class Vec2 {
 		this.y = y;
 	}
 
+	public Vec2 subtractedWith(Vec2 s){
+		return new Vec2(x-s.getX(),y-s.getY());
+	}
+	
+	public double getLength(){
+		return Math.sqrt(Math.pow(x, 2)+Math.pow(y, 2));
+	}
 	
 }

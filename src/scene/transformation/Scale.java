@@ -17,4 +17,10 @@ public class Scale extends Transformation{
 	public Scale(Vec3 vector){
 		this.vector = vector;
 	}
+
+	public Vec3 getVector() {
+		return vector;
+	}
+	
+	
 }

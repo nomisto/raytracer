@@ -17,4 +17,9 @@ public class Translation extends Transformation{
 		this.vector = vector;
 	}
 
+	public Vec3 getVector() {
+		return vector;
+	}
+
+	
 }

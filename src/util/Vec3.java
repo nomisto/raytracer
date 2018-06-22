@@ -62,6 +62,14 @@ public class Vec3 {
 	}
 	
 	/**
+	 * @param scalar A scalar to divide each of x, y and z
+	 * @return A new vector containing the division
+	 */
+	public Vec3 dividedByScalar(double scalar) {
+		return new Vec3(x/scalar,y/scalar,z/scalar);
+	}
+	
+	/**
 	 * @param vector The vector to calculate the crossproduct with
 	 * @return A new vector containing the crossproduct
 	 */
@@ -140,6 +148,8 @@ public class Vec3 {
 	public void setZ(double z) {
 		this.z = z;
 	}
+
+	
 	
 	
 	

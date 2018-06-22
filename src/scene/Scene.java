@@ -6,10 +6,6 @@ import scene.light.Light;
 import scene.surface.Surface;
 import util.Vec3;
 
-/**
- * @author Simon
- * The scene class contains all the elements of a scene (camera, lights, surfaces, ...)
- */
 public class Scene {
 	
 	String outputfile;
@@ -18,14 +14,6 @@ public class Scene {
 	ArrayList<Light> lights;
 	ArrayList<Surface> surfaces;
 	
-	/**
-	 * Constructor of this class
-	 * @param outputfile The name of the outputimage
-	 * @param background_color The background color
-	 * @param camera The camera
-	 * @param lights The lights
-	 * @param surfaces The surfaces
-	 */
 	public Scene(String outputfile, Vec3 background_color, Camera camera, ArrayList<Light> lights, ArrayList<Surface> surfaces){
 		this.outputfile = outputfile;
 		this.background_color = background_color;
@@ -34,37 +22,22 @@ public class Scene {
 		this.surfaces = surfaces;
 	}
 
-	/**
-	 * @return The name of the outputimage
-	 */
 	public String getOutputfile() {
 		return outputfile;
 	}
 
-	/**
-	 * @return The backgroundcolor
-	 */
 	public Vec3 getBackground_color() {
 		return background_color;
 	}
 
-	/**
-	 * @return The camera
-	 */
 	public Camera getCamera() {
 		return camera;
 	}
 
-	/**
-	 * @return The lights
-	 */
 	public ArrayList<Light> getLights() {
 		return lights;
 	}
 
-	/**
-	 * @return The surfaces
-	 */
 	public ArrayList<Surface> getSurfaces() {
 		return surfaces;
 	}

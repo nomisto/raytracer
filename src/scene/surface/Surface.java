@@ -1,9 +1,7 @@
 package scene.surface;
 
-import java.util.ArrayList;
-
 import scene.material.Material;
-import scene.transformation.Transformation;
+import util.Mat4;
 
 /**
  * @author Simon
@@ -11,16 +9,16 @@ import scene.transformation.Transformation;
  */
 public abstract class Surface {
 	Material material;
-	ArrayList<Transformation> transformations;
+	Mat4 transformationMatrix;
 	
 	/**
 	 * Constructor of this class
 	 * @param material The material of the surface
 	 * @param transformations The transformations of the surface
 	 */
-	public Surface(Material material, ArrayList<Transformation> transformations){
+	public Surface(Material material, Mat4 transformationMatrix){
 		this.material = material;
-		this.transformations = transformations;
+		this.transformationMatrix = transformationMatrix;
 	}
 
 	/**
@@ -30,11 +28,8 @@ public abstract class Surface {
 		return material;
 	}
 
-	/**
-	 * @return The transformations of the surface
-	 */
-	public ArrayList<Transformation> getTransformations() {
-		return transformations;
+	public Mat4 getTransformationMatrix() {
+		return transformationMatrix;
 	}
 
 	

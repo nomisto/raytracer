@@ -18,4 +18,13 @@ public class Rotation extends Transformation{
 		this.axis = axis;
 	}
 
+	public double getTheta() {
+		return theta;
+	}
+
+	public int getAxis() {
+		return axis;
+	}
+
+	
 }

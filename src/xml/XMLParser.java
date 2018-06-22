@@ -3,6 +3,7 @@ package xml;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.jdom2.Document;
@@ -15,6 +16,7 @@ import scene.light.*;
 import scene.material.*;
 import scene.surface.*;
 import scene.transformation.*;
+import util.Mat4;
 import util.Vec3;
 import util.Vec4;
 
@@ -163,10 +165,10 @@ public class XMLParser {
         		}
         		
         		ArrayList<Transformation> transforms = new ArrayList<Transformation>();
-        		if(surface.getChild("transforms") != null){
-	        		Element transformationsElement = surface.getChild("transforms");
+        		if(surface.getChild("transform") != null){
+	        		Element transformationsElement = surface.getChild("transform");
 	        		List<Element> transformationsList = transformationsElement.getChildren();
-	        		for(int j = 0; i<transformationsList.size(); i++){
+	        		for(int j = 0; j<transformationsList.size(); j++){
 	        			Element transformationElement = transformationsList.get(j);
 	        			Transformation transformation = null;
 	        			if(transformationElement.getName().equals("translate")){
@@ -194,6 +196,32 @@ public class XMLParser {
 	        			transforms.add(transformation);
 	        		}
         		}
+        		
+        		Collections.reverse(transforms);
+        		
+    			Mat4 tm = new Mat4();
+    			tm.identity();
+    			for(Transformation t : transforms) {
+    				if(t instanceof Translation) {
+    					Vec3 tVector = ((Translation) t).getVector();
+    					tm = tm.translate(-tVector.getX(), -tVector.getY(), -tVector.getZ());
+    				} else if(t instanceof Rotation) {
+    					int axis = ((Rotation)t).getAxis();
+    					if(axis == 1) {
+    						tm = tm.rotateX(-((Rotation)t).getTheta());
+    					} else if(axis == 2) {
+    						tm = tm.rotateY(-((Rotation)t).getTheta());
+    					} else if(axis == 3) {
+    						tm = tm.rotateZ(-((Rotation)t).getTheta());
+    					}
+    					
+    				} else if(t instanceof Scale) {
+    					
+    					Vec3 sVector = ((Scale) t).getVector();
+    					tm = tm.scale(1/sVector.getX(), 1/sVector.getY(), 1/sVector.getZ());
+    					
+    				}
+    			}
 	        	
 	        	if(surface.getName().equals("sphere")){
 	        		double radius = Double.parseDouble(surface.getAttributeValue("radius"));
@@ -202,11 +230,11 @@ public class XMLParser {
 	        		double ys = Double.parseDouble(spherePositionElement.getAttributeValue("y"));
 	        		double zs = Double.parseDouble(spherePositionElement.getAttributeValue("z"));
 	        		Vec3 spherePosition = new Vec3(xs,ys,zs);
-	        		Surface sphere = new Sphere(radius,spherePosition,material,transforms);
+	        		Surface sphere = new Sphere(radius,spherePosition,material,tm);
 	        		surfaces.add(sphere);
 	        	} else if(surface.getName().equals("mesh")){
 	        		String surfName = surface.getAttributeValue("name");
-	        		Surface mesh = new Mesh(surfName,material,transforms);
+	        		Surface mesh = new Mesh(surfName,material,tm);
 	        		surfaces.add(mesh);
 	        	}
 	        }
