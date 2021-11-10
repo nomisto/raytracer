@@ -1,43 +1,74 @@
-# java_raytracer
-Simon Ott, 1463744
+# Raytracer
 
+A simple java raytracer.
 
-Build command, when in the java_raytracer folder:
+## Build
 
+```bash
 (Windows) javac -cp "./src;./lib/*" -d ./bin src/Main.java
 (Linux) javac -cp "./src:./lib/*" -d ./bin src/Main.java
+```
 
+## Run
 
-Run command, when in the java_raytracer folder:
+```bash
+(Windows) java -cp "./bin;./lib/*" Main {path-to-scene-XML} [-ss {width} {height} {minimumdistance}]
+(Linux) java -cp "./bin:./lib/*" Main {path-to-scene-XML} [-ss {width} {height} {minimumdistance}]
+```
 
-(Windows) java -cp "./bin;./lib/*" Main "locationOfXML"
-(Linux) java -cp "./bin:./lib/*" Main "locationOfXML"
+Output location of the generated image is the same as the path of the scene XML file (Name of generated image has to be specified in the scene).
 
-f.e. java -cp "./bin;./lib/*" Main "C:/Users/Simon/Desktop/Scenes/example3.xml"
+**-ss, --supersampling** {width} {height} {minimumdistance} (optional)
 
+This option specifies [supersampling with a Poisson disc](https://en.wikipedia.org/wiki/Supersampling#Poisson_disk), where {width} and {height} specify the shape of the sample window and {minimumdistance} the minimum distance of the different rays.
 
-
-If you want to run supersampling add the following parameters:
-ss width height minimumdistance
-f.e. a poissondisc with width and height 1 px and a minimumdistance of 0.25 would be:
-java -cp "./bin;./lib/*" Main "C:/Users/Simon/Desktop/Scenes/example4.xml" ss 1 1 0.25
-
-
-
-
-Please note the direction of the slashes and the quotation marks of the location of the xml.
-Please make sure the scene.dtd is near the xml.
-Output location is the same as the path of the XML file.
-For the output of a black image, use the "black.xml" provided.
-The width and height of the supersampling are the size of the window of the supersampling.
 If width and height are 1px, the different rays only shoot through the one pixel.
-If width and height are 1.5px, the different rays shoout through the one pixel and through 0.25 of the
+If width and height are 1.5px, the different rays shoot through the one pixel and through 0.25 of the
 upper, left, right and bottom pixel.
 
-Runtimes:
-example4 <1mins
-example4+ss(1/1/0.25) <2mins
-example5 ~6mins
-example5+ss(1/1/0.25) ~90mins
-example6 <1mins
-example6+ss(1/1/0.25) <2mins
+F.e.: -ss 1 1 0.25 would result in a *maximum* of 25 rays cast (* is a cast):
+
+```bash
+     ​​​​​​​​​​​​​​​​​​​​​​​​ 1px ​​​​​​​​​​​​​​​​​​​​​​​​
+ 
+​    * -- 0.25 -- * -- 0.25 -- * -- 0.25 -- * -- 0.25 -- *
+​    |
+​    0.25
+​    |
+​    * -- ... 
+​    |
+​    0.25
+​    |
+1px  * -- ...
+​    |
+​    0.25
+​    |
+​    * -- ...
+​    |
+​    0.25
+​    |
+​    * -- ...
+
+```
+
+## Scenes
+
+Please make sure the scene.dtd is in the same folder as the scene xml. Scene specifications can be found [here]()
+
+## Examples
+
+Examples of scenes and generated images can be found in the `examples` folder. All example images were generated with supersampling (ss 1 1 0.25).
+
+```
+![alt text](http://url/to/img.png)
+```
+
+## Runtimes
+
+| Scene                                   | Time       |
+| --------------------------------------- | ---------- |
+| example4.xml + supersampling (1/1/0.25) | ~ 15.5 sec |
+| example5.xml + supersampling(1/1/0.25)  | ~ 14.2 sec |
+| example6.xml + supersampling(1/1/0.25)  | ~ 67.7 min |
+
+Note that renderings without supersampling are much faster. Experiments run on an AMD Ryzen 7 PRO 4750U with Radeon Graphics, 1700 MHz, 8 Cores (16 logical Cores).
